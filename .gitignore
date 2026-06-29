@@ -5,4 +5,14 @@ venv/
 .env
 .env.*
 !.env.example
-
+node_modules/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.vercel/
+.render/
+*.log

@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field, computed_field
+from pydantic import Field, computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     app_env: str = "development"
     debug: bool = False
     api_v1_prefix: str = "/api/v1"
+    log_level: str = "INFO"
+    log_format: str = "json"
 
     postgres_host: str = "localhost"
     postgres_port: int = 5432
@@ -36,12 +38,28 @@ class Settings(BaseSettings):
     @computed_field
     @property
     def sqlalchemy_database_uri(self) -> str:
-        if self.database_url:
-            return self.database_url
-        return (
+        uri = self.database_url or (
             f"postgresql+psycopg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
+        if uri.startswith("postgres://"):
+            return uri.replace("postgres://", "postgresql+psycopg://", 1)
+        if uri.startswith("postgresql://"):
+            return uri.replace("postgresql://", "postgresql+psycopg://", 1)
+        return uri
+
+    @field_validator("debug", mode="before")
+    @classmethod
+    def parse_debug(cls, value):
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "on", "debug", "development"}:
+                return True
+            if normalized in {"0", "false", "no", "off", "release", "production"}:
+                return False
+        return value
 
 
 @lru_cache

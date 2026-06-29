@@ -76,6 +76,20 @@ POSTGRES_PASSWORD
 - `GET /api/v1/metadata/{id}`
 - `PUT /api/v1/metadata/{id}`
 - `DELETE /api/v1/metadata/{id}`
+- `POST /api/v1/templates`
+- `GET /api/v1/templates`
+- `GET /api/v1/templates/{id}`
+- `PUT /api/v1/templates/{id}`
+- `DELETE /api/v1/templates/{id}`
+- `POST /api/v1/templates/{id}/clone`
+- `POST /api/v1/template-categories`
+- `GET /api/v1/template-categories`
+- `PUT /api/v1/template-categories/{id}`
+- `DELETE /api/v1/template-categories/{id}`
+- `POST /api/v1/alarm-intelligence/analyze`
+- `POST /api/v1/alarm-intelligence/process`
+- `GET /api/v1/alarm-intelligence/results`
+- `GET /api/v1/alarm-intelligence/results/{id}`
 
 ## Foundation Boundaries
 

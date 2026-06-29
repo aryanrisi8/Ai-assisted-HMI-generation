@@ -288,15 +288,28 @@ class TemplateCategoryRead(TemplateCategoryBase, ORMModel):
 
 
 class TemplateBase(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     category_id: UUID
     name: str = Field(min_length=1, max_length=160)
     slug: str = Field(min_length=1, max_length=160)
+    industry: str = Field(default="general", min_length=1, max_length=120)
     description: str | None = None
-    schema_json: dict[str, Any]
+    layout: dict[str, Any] = Field(default_factory=dict)
+    components: list[dict[str, Any]] = Field(default_factory=list)
+    template_schema: dict[str, Any] | None = Field(default=None, alias="schema_json")
     preview_image_url: str | None = Field(default=None, max_length=500)
     version: int = Field(default=1, gt=0)
     is_active: bool = True
     metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_template_structure(self) -> "TemplateBase":
+        if not isinstance(self.layout, dict):
+            raise ValueError("Template layout must be an object.")
+        if not isinstance(self.components, list):
+            raise ValueError("Template components must be an array.")
+        return self
 
 
 class TemplateCreate(TemplateBase):
@@ -304,21 +317,48 @@ class TemplateCreate(TemplateBase):
 
 
 class TemplateUpdate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     category_id: UUID | None = None
     name: str | None = Field(default=None, min_length=1, max_length=160)
     slug: str | None = Field(default=None, min_length=1, max_length=160)
+    industry: str | None = Field(default=None, min_length=1, max_length=120)
     description: str | None = None
-    schema_json: dict[str, Any] | None = None
+    layout: dict[str, Any] | None = None
+    components: list[dict[str, Any]] | None = None
+    template_schema: dict[str, Any] | None = Field(default=None, alias="schema_json")
     preview_image_url: str | None = Field(default=None, max_length=500)
     version: int | None = Field(default=None, gt=0)
     is_active: bool | None = None
     metadata_json: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def validate_template_update_structure(self) -> "TemplateUpdate":
+        if self.layout is not None and not isinstance(self.layout, dict):
+            raise ValueError("Template layout must be an object.")
+        if self.components is not None and not isinstance(self.components, list):
+            raise ValueError("Template components must be an array.")
+        return self
 
 
 class TemplateRead(TemplateBase, ORMModel):
     id: UUID
     created_at: datetime
     updated_at: datetime
+    category: TemplateCategoryRead | None = None
+
+
+class TemplateCloneRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=160)
+    slug: str | None = Field(default=None, min_length=1, max_length=160)
+    category_id: UUID | None = None
+
+
+class TemplateSearchParams(BaseModel):
+    q: str | None = None
+    industry: str | None = None
+    category_id: UUID | None = None
+    is_active: bool | None = True
 
 
 class DashboardBase(BaseModel):
@@ -382,6 +422,43 @@ class DashboardLayoutRead(DashboardLayoutBase, ORMModel):
     id: UUID
     created_at: datetime
     updated_at: datetime
+
+
+class DashboardEditorLayout(BaseModel):
+    breakpoint: str = Field(default='lg', min_length=1, max_length=40)
+    columns: int = Field(default=12, gt=0)
+    row_height: int = Field(default=30, gt=0)
+    components: list[dict[str, Any]] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class DashboardEditorCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    description: str | None = None
+    metadata_id: UUID | None = None
+    template_id: UUID | None = None
+    status: DashboardStatus = DashboardStatus.DRAFT
+    schema_version: int = Field(default=1, gt=0)
+    is_public: bool = False
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+    layout: DashboardEditorLayout | None = None
+
+
+class DashboardEditorUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=160)
+    description: str | None = None
+    metadata_id: UUID | None = None
+    template_id: UUID | None = None
+    status: DashboardStatus | None = None
+    schema_version: int | None = Field(default=None, gt=0)
+    is_public: bool | None = None
+    metadata_json: dict[str, Any] | None = None
+    layout: DashboardEditorLayout | None = None
+
+
+class DashboardEditorRead(BaseModel):
+    dashboard: DashboardRead
+    layout: DashboardLayoutRead | None = None
 
 
 class ComponentBase(BaseModel):
@@ -583,3 +660,51 @@ class MetadataRead(ORMModel):
     sensors: list[SensorRead]
     signals: list[SignalRead]
     alarms: list[AlarmRead]
+
+
+class AlarmStreamEvent(BaseModel):
+    code: str = Field(min_length=1, max_length=120)
+    name: str | None = Field(default=None, max_length=160)
+    severity: AlarmSeverity | str = AlarmSeverity.MEDIUM
+    source: str | None = Field(default=None, max_length=160)
+    source_name: str | None = Field(default=None, max_length=160)
+    signal_tag: str | None = Field(default=None, max_length=160)
+    signal: str | None = Field(default=None, max_length=160)
+    message: str | None = None
+    timestamp: datetime | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata_json: dict[str, Any] | None = None
+
+
+class AlarmIntelligenceRequest(BaseModel):
+    events: list[AlarmStreamEvent] = Field(min_length=1)
+
+
+class AlarmIntelligenceGroup(BaseModel):
+    key: str
+    alarm_count: int = Field(ge=0)
+    max_severity: str
+    affected_signals: list[str] = Field(default_factory=list)
+
+
+class AlarmIntelligenceCluster(BaseModel):
+    cluster_id: int
+    alarm_count: int = Field(ge=0)
+    average_severity: str
+    representative_signal: str | None = None
+
+
+class AlarmIntelligenceAnalysis(BaseModel):
+    root_cause: str
+    confidence: int = Field(ge=0, le=100)
+    affected_signals: list[str] = Field(default_factory=list)
+    severity_ranking: list[dict[str, Any]] = Field(default_factory=list)
+    suppressed_duplicates: int = Field(ge=0)
+    grouped_incidents: list[AlarmIntelligenceGroup] = Field(default_factory=list)
+    incident_clusters: list[AlarmIntelligenceCluster] = Field(default_factory=list)
+
+
+class AlarmIntelligenceResultRead(AlarmIntelligenceAnalysis, ORMModel):
+    id: UUID
+    input_event_count: int = Field(ge=0)
+    created_at: datetime

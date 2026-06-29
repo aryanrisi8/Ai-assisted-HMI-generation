@@ -411,7 +411,10 @@ class Template(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     slug: Mapped[str] = mapped_column(String(160), nullable=False, unique=True)
+    industry: Mapped[str] = mapped_column(String(120), nullable=False, default="general")
     description: Mapped[str | None] = mapped_column(Text)
+    layout_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    components_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     schema_json: Mapped[dict] = mapped_column(JSON, nullable=False)
     preview_image_url: Mapped[str | None] = mapped_column(String(500))
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
@@ -424,8 +427,10 @@ class Template(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __table_args__ = (
         Index("ix_templates_category_id", "category_id"),
         Index("ix_templates_slug", "slug"),
+        Index("ix_templates_industry", "industry"),
         Index("ix_templates_active", "is_active"),
         CheckConstraint("version > 0", name="ck_templates_version_positive"),
+        CheckConstraint("length(industry) >= 1", name="ck_templates_industry_min_length"),
     )
 
 
@@ -577,5 +582,38 @@ class AssistantLog(UUIDPrimaryKeyMixin, Base):
         CheckConstraint(
             "latency_ms IS NULL OR latency_ms >= 0",
             name="ck_assistant_logs_latency_non_negative",
+        ),
+    )
+
+
+class AlarmIntelligenceResult(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "alarm_intelligence_results"
+
+    root_cause: Mapped[str] = mapped_column(String(255), nullable=False)
+    confidence: Mapped[int] = mapped_column(Integer, nullable=False)
+    affected_signals: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    severity_ranking: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    suppressed_duplicates: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    grouped_incidents: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    incident_clusters: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    input_event_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_alarm_intelligence_results_created_at", "created_at"),
+        Index("ix_alarm_intelligence_results_root_cause", "root_cause"),
+        CheckConstraint(
+            "confidence >= 0 AND confidence <= 100",
+            name="ck_alarm_intelligence_results_confidence_range",
+        ),
+        CheckConstraint(
+            "suppressed_duplicates >= 0",
+            name="ck_alarm_intelligence_results_suppressed_non_negative",
+        ),
+        CheckConstraint(
+            "input_event_count >= 0",
+            name="ck_alarm_intelligence_results_input_count_non_negative",
         ),
     )
